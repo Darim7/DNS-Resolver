@@ -24,8 +24,23 @@ def query(name: str, type: str, servers: list[str]):
 
     return response
 
+def getAuthoritiesIPFor(name: str):
+    auths = []
+    response = query(name, "A", root_servers)
+    
+    # Get the authoritative servers for the domain name.
+    auths_ns = response.authority[0]
+    print(f"Found the name servers of the TLD {type(auths_ns)}:\n{auths_ns.items}")
+
+    # Fetch all the IP addresses of the authoritative servers.
+    for rdata in auths_ns:
+        print(rdata.to_text())
+
+    return auths
+
 if __name__ == "__main__":
     name, record_type = sys.argv[1], sys.argv[2]
-    print(f"You just asked: {name} IN {record_type}")
+    print("QUESTION SECTION:")
     res = query(name, record_type, root_servers)
-    print(f"You got an answer: {res.to_text()}")
+    print("ANSWER SECTION:")
+    print(getAuthoritiesIPFor(name))
