@@ -24,6 +24,39 @@ def query(name: str, type: str, servers: list[str]):
 
     return response
 
+def extractNS(response: dns.message.Message):
+    name_servers = []
+
+    if response.authority:
+        for rrset in response.authority:
+            if rrset.rdtype == dns.rdatatype.NS:  # Look for NS records
+                for rdata in rrset:
+                    name_servers.append(rdata.to_text())  # Get nameserver names
+
+    return name_servers
+
+def queryTilIP(name: str):
+    ip = None
+    response = query(name, "A", root_servers)
+
+    while not response.answer:
+        # Get the authoritative servers for the domain name.
+        # auths_ns = response.authority[0]
+        # print(f"Found the name servers of the TLD {type(auths_ns)}:\n{auths_ns.items}")
+
+        # # Fetch all the IP addresses of the authoritative servers.
+        # for rdata in auths_ns:
+        #     ns_name = rdata.to_text()
+        #     print(ns_name)
+        #     res = query(ns_name, "A", root_servers)
+        #     print(res)
+        ns_name = extractNS(response)
+        response = query(ns_name[0], "A", root_servers)
+
+    ip = response.answer
+
+    return ip
+
 def getAuthoritiesIPFor(name: str):
     auths = []
     response = query(name, "A", root_servers)
@@ -34,7 +67,10 @@ def getAuthoritiesIPFor(name: str):
 
     # Fetch all the IP addresses of the authoritative servers.
     for rdata in auths_ns:
-        print(rdata.to_text())
+        ns_name = rdata.to_text()
+        print(ns_name)
+        res = query(ns_name, "A", root_servers)
+        print(res)
 
     return auths
 
