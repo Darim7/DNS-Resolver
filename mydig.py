@@ -15,8 +15,8 @@ root_servers = [
     "192.58.128.30", "193.0.14.129", "199.7.83.42", "202.12.27.33"
 ]
 
-def query(name: str, type: str, servers: list[str]):
-    q = dns.message.make_query(name, type)
+def query(name: str, type: str, servers: list[str], sec=False):
+    q = dns.message.make_query(name, type, want_dnssec=sec)
 
     response = None
     for server in servers:
@@ -50,35 +50,33 @@ def extract_record(response_set: dns.rrset.RRset, record_type: str):
                     ips.append(rdata.to_text())  # Get ip
     return ips
 
-def recurse(name: str, record_type: str, query_server_ips: list[str]):
-    response = query(name, record_type, query_server_ips)
+def recurse(name: str, record_type: str, query_server_ips: list[str], sec=False):
+    response = query(name, record_type, query_server_ips, sec)
     if response and response.answer:
         return response
 
     # print(f"Didn't find answer section, querying for additional section...")
-    # print(response)
     if response and response.additional:
         additional_ips = extract_record(response.additional, "A")
-        # print(additional_ips)
-        return recurse(name, record_type, additional_ips)  # Return the IP address
+        return recurse(name, record_type, additional_ips, sec)  # Return the IP address
     
     # print(f"Didn't find a additional section, looking for authorities...")
     if response and response.authority:
         authority_ns = extract_record(response.authority, "NS")
         res = None
         for ns in authority_ns:
-            if not res:
-                res = recurse(ns, "A", root_servers)
-            else:
+            if res:
                 break
+            res = recurse(ns, "A", root_servers, sec)
         ns_ips = extract_record(res.answer)
-        return recurse(name, record_type, ns_ips)
+        return recurse(name, record_type, ns_ips, sec)
 
 if __name__ == "__main__":
     name, record_type = sys.argv[1], sys.argv[2]
+    want_sec = record_type.upper() == "A"
 
     start = time.perf_counter()
-    res = recurse(name, record_type, root_servers)
+    res = recurse(name, record_type, root_servers, want_sec)
     end = time.perf_counter()
     query_time = (end - start) * 1000
 
