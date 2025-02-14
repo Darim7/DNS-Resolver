@@ -63,10 +63,16 @@ def recurse(name: str, record_type: str, query_server_ips: list[str]):
         return recurse(name, record_type, additional_ips)  # Return the IP address
     
     # print(f"Didn't find a additional section, looking for authorities...")
-    # if response and response.answer:
-    #     for rrset in response.answer:
-    #         for rdata in rrset:
-    #             return rdata.to_text()  # Return the IP address
+    if response and response.authority:
+        authority_ns = extract_record(response.authority, "NS")
+        res = None
+        for ns in authority_ns:
+            if not res:
+                res = recurse(ns, "A", root_servers)
+            else:
+                break
+        ns_ips = extract_record(res.answer)
+        return recurse(name, record_type, ns_ips)
 
 if __name__ == "__main__":
     name, record_type = sys.argv[1], sys.argv[2]
@@ -78,11 +84,11 @@ if __name__ == "__main__":
 
     print("QUESTION SECTION:")
     for rrset in res.question:
-            print(rrset.to_text())
+        print(rrset.to_text())
 
     print("\nANSWER SECTION:")
     for rrset in res.answer:
-            print(rrset.to_text())
+        print(rrset.to_text())
 
     print(f"\nQuery time: {int(query_time)} msec")
     print(f"WHEN: {time.strftime('%a %b %d %H:%M:%S %Y')}")
