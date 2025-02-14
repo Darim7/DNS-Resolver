@@ -1,6 +1,10 @@
 import dns.exception
 import dns.message
 import dns.query
+import dns.rrset
+import dns.rdatatype
+
+import time
 import sys
 
 # Root servers from iana.org
@@ -17,6 +21,7 @@ def query(name: str, type: str, servers: list[str]):
     response = None
     for server in servers:
         try:
+            # print(f"Querying {name} {type} @{server}")
             response = dns.query.udp(q, server, timeout=5)
             break
         except dns.exception.Timeout:
@@ -24,59 +29,61 @@ def query(name: str, type: str, servers: list[str]):
 
     return response
 
-def extractNS(response: dns.message.Message):
-    name_servers = []
+def extract_record(response_set: dns.rrset.RRset, record_type: str):
+    ips = []
+    rtype = None
+    record_type = record_type.upper()
 
-    if response.authority:
-        for rrset in response.authority:
-            if rrset.rdtype == dns.rdatatype.NS:  # Look for NS records
-                for rdata in rrset:
-                    name_servers.append(rdata.to_text())  # Get nameserver names
+    if record_type == "NS":
+        rtype = dns.rdatatype.NS
+    elif record_type == "A":
+        rtype = dns.rdatatype.A
+    elif record_type == "MX":
+        rtype = dns.rdatatype.MX
+    else:
+        print(f"Invalid record type.")
+        return ips
 
-    return name_servers
+    for rrset in response_set:
+        for rdata in rrset:
+            if rdata.rdtype == rtype:  # Look for A records
+                    ips.append(rdata.to_text())  # Get ip
+    return ips
 
-def queryTilIP(name: str):
-    ip = None
-    response = query(name, "A", root_servers)
+def recurse(name: str, record_type: str, query_server_ips: list[str]):
+    response = query(name, record_type, query_server_ips)
+    if response and response.answer:
+        return response
 
-    while not response.answer:
-        # Get the authoritative servers for the domain name.
-        # auths_ns = response.authority[0]
-        # print(f"Found the name servers of the TLD {type(auths_ns)}:\n{auths_ns.items}")
-
-        # # Fetch all the IP addresses of the authoritative servers.
-        # for rdata in auths_ns:
-        #     ns_name = rdata.to_text()
-        #     print(ns_name)
-        #     res = query(ns_name, "A", root_servers)
-        #     print(res)
-        ns_name = extractNS(response)
-        response = query(ns_name[0], "A", root_servers)
-
-    ip = response.answer
-
-    return ip
-
-def getAuthoritiesIPFor(name: str):
-    auths = []
-    response = query(name, "A", root_servers)
+    # print(f"Didn't find answer section, querying for additional section...")
+    # print(response)
+    if response and response.additional:
+        additional_ips = extract_record(response.additional, "A")
+        # print(additional_ips)
+        return recurse(name, record_type, additional_ips)  # Return the IP address
     
-    # Get the authoritative servers for the domain name.
-    auths_ns = response.authority[0]
-    print(f"Found the name servers of the TLD {type(auths_ns)}:\n{auths_ns.items}")
-
-    # Fetch all the IP addresses of the authoritative servers.
-    for rdata in auths_ns:
-        ns_name = rdata.to_text()
-        print(ns_name)
-        res = query(ns_name, "A", root_servers)
-        print(res)
-
-    return auths
+    # print(f"Didn't find a additional section, looking for authorities...")
+    # if response and response.answer:
+    #     for rrset in response.answer:
+    #         for rdata in rrset:
+    #             return rdata.to_text()  # Return the IP address
 
 if __name__ == "__main__":
     name, record_type = sys.argv[1], sys.argv[2]
+
+    start = time.perf_counter()
+    res = recurse(name, record_type, root_servers)
+    end = time.perf_counter()
+    query_time = (end - start) * 1000
+
     print("QUESTION SECTION:")
-    res = query(name, record_type, root_servers)
-    print("ANSWER SECTION:")
-    print(getAuthoritiesIPFor(name))
+    for rrset in res.question:
+            print(rrset.to_text())
+
+    print("\nANSWER SECTION:")
+    for rrset in res.answer:
+            print(rrset.to_text())
+
+    print(f"\nQuery time: {int(query_time)} msec")
+    print(f"WHEN: {time.strftime('%a %b %d %H:%M:%S %Y')}")
+    print(f"MSG SIZE rcvd: {len(res.to_wire())}")
