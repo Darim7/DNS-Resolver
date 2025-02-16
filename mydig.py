@@ -1,6 +1,8 @@
+import dns.dnssec
 import dns.exception
 import dns.message
 import dns.query
+import dns.rdataclass
 import dns.rrset
 import dns.rdatatype
 
@@ -59,17 +61,33 @@ def extract_record(response_set: dns.rrset.RRset, record_type: str):
                 recs.append(rdata.to_text())  # Get records.
     return recs
 
-def check_sec(response_set: dns.rrset.RRset):
+def extract_rdata(response_set: dns.rrset.RRset, record_type: str):
+    data = []
+    rtype = select_rdatatype(record_type)
+    for rrset in response_set:
+        for rdata in rrset:
+            if rdata.rdtype == rtype:  # Look for records.
+                data.append(rdata)  # Get records.
+    return data
+
+def check_sec(response: dns.message.Message, name):
     # Get all the signatures.
-    rrsig = extract_record(response_set, "RRSIG")
-    print(rrsig)
+    rrsig_rrset = response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.RRSIG)
+    record_rrset = response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.A)
+    # print(f"Got rrsig: {rrsig_rrset}")
+
+    # Request for dnskey.
+    key_res = recurse(name, "DNSKEY")
+    dnskey_rrset = key_res.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.DNSKEY)
+    # print(f"Got dnskey: {dnskey_rrset} for {name}")
+
+    print([key for key in dnskey_rrset])
+    dns.dnssec.validate_rrsig(record_rrset, rrsig_rrset, {dnskey_rrset.name: dnskey_rrset})
     pass
 
-def recurse(name: str, record_type: str, query_server_ips: list[str], sec=False):
+def recurse(name: str, record_type: str, query_server_ips: list[str] = root_servers, sec=False):
     response = query(name, record_type, query_server_ips, sec)
     if response and response.answer:
-        if sec:
-            check_sec(response.answer)
         return response
 
     # print(f"Didn't find answer section, querying for additional section...")
@@ -94,6 +112,8 @@ if __name__ == "__main__":
 
     start = time.perf_counter()
     res = recurse(name, record_type, root_servers, want_sec)
+    if want_sec:
+        check_sec(res, name)
     end = time.perf_counter()
     query_time = (end - start) * 1000
 
