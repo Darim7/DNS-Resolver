@@ -29,8 +29,7 @@ def query(name: str, type: str, servers: list[str], sec=False):
 
     return response
 
-def extract_record(response_set: dns.rrset.RRset, record_type: str):
-    ips = []
+def select_rdatatype(record_type: str):
     rtype = None
     record_type = record_type.upper()
 
@@ -40,19 +39,37 @@ def extract_record(response_set: dns.rrset.RRset, record_type: str):
         rtype = dns.rdatatype.A
     elif record_type == "MX":
         rtype = dns.rdatatype.MX
-    else:
-        print(f"Invalid record type.")
-        return ips
+    elif record_type == "DNSKEY":
+        rtype = dns.rdatatype.DNSKEY
+    elif record_type == "RRSIG":
+        rtype = dns.rdatatype.RRSIG
+    
+    return rtype
+
+def extract_record(response_set: dns.rrset.RRset, record_type: str):
+    recs = []
+    rtype = select_rdatatype(record_type)
+    if not rtype:
+        print(f"Not supported record type: {record_type}")
+        return recs
 
     for rrset in response_set:
         for rdata in rrset:
-            if rdata.rdtype == rtype:  # Look for A records
-                    ips.append(rdata.to_text())  # Get ip
-    return ips
+            if rdata.rdtype == rtype:  # Look for records.
+                recs.append(rdata.to_text())  # Get records.
+    return recs
+
+def check_sec(response_set: dns.rrset.RRset):
+    # Get all the signatures.
+    rrsig = extract_record(response_set, "RRSIG")
+    print(rrsig)
+    pass
 
 def recurse(name: str, record_type: str, query_server_ips: list[str], sec=False):
     response = query(name, record_type, query_server_ips, sec)
     if response and response.answer:
+        if sec:
+            check_sec(response.answer)
         return response
 
     # print(f"Didn't find answer section, querying for additional section...")
@@ -68,7 +85,7 @@ def recurse(name: str, record_type: str, query_server_ips: list[str], sec=False)
             if res:
                 break
             res = recurse(ns, "A", root_servers, sec)
-        ns_ips = extract_record(res.answer)
+        ns_ips = extract_record(res.answer, "A")
         return recurse(name, record_type, ns_ips, sec)
 
 if __name__ == "__main__":
