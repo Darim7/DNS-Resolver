@@ -72,18 +72,21 @@ def extract_rdata(response_set: dns.rrset.RRset, record_type: str):
 
 def check_sec(response: dns.message.Message, name):
     # Get all the signatures.
-    rrsig_rrset = response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.RRSIG)
-    record_rrset = response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.A)
-    # print(f"Got rrsig: {rrsig_rrset}")
+    rrsig_rrset = extract_rdata(response.answer, "RRSIG")[0] # response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.RRSIG, create=True)
+    record_rrset = response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.A, create=True)
+    # print(f"Got rrsig: \n{rrsig_rrset}")
 
     # Request for dnskey.
     key_res = recurse(name, "DNSKEY")
-    dnskey_rrset = key_res.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.DNSKEY)
-    # print(f"Got dnskey: {dnskey_rrset} for {name}")
-
-    print([key for key in dnskey_rrset])
-    dns.dnssec.validate_rrsig(record_rrset, rrsig_rrset, {dnskey_rrset.name: dnskey_rrset})
-    pass
+    if not key_res:
+        return False
+    dnskey_rrset = key_res.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.DNSKEY, create=True)
+    # print(f"\nGot dnskey: {dnskey_rrset[0]} for {name}")
+    try:
+        dns.dnssec.validate_rrsig(record_rrset, rrsig_rrset, {dnskey_rrset.name: dnskey_rrset})
+    except:
+        return False
+    return True
 
 def recurse(name: str, record_type: str, query_server_ips: list[str] = root_servers, sec=False):
     response = query(name, record_type, query_server_ips, sec)
@@ -103,6 +106,8 @@ def recurse(name: str, record_type: str, query_server_ips: list[str] = root_serv
             if res:
                 break
             res = recurse(ns, "A", root_servers, sec)
+        if not res:
+            return None
         ns_ips = extract_record(res.answer, "A")
         return recurse(name, record_type, ns_ips, sec)
 
