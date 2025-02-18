@@ -37,3 +37,15 @@ Since the `ksk` is the public key from the parent zone, and the `DS` record is t
 To verify that, my dns resolver will request the `DS` record for the name at the parent zone of the current zone, then it uses `dns.dnssec.make_ds()` hash the `ksk` then it compares the `DS` record to see if everything matches.
 
 Very lastly, I would traverse up to the parent zone and make sure the same things are checked and verified.
+
+# Results and Comparisons
+![Query Time using Different Resolvers in milisecond(ms)](Query%20Time%20using%20Different%20Resolvers%20in%20milisecond(ms).png)
+
+## Observations
+Before I start to explain anything, I would like to give out some basic informations. 
+
+For my own implemented resolver, it is the slowest out of the three resolvers. I think the reason is my resolver query the root servers everytime when I make the request, and the result is not cached. Therefore, each request would start a search from the root level servers.
+
+For using google's public DNS resolver, it is in the middle. I think this is the case because I specified to use server `8.8.8.8`. This would make the query longer because of distance, however, it is still very quick, I think this is because this public server already has the name resolved in cache, what makes it slower than the local resolver is only because of the physical distance.
+
+For the local resolver, it usually takes about 20ms to make the first query, when I make more queries after the first one, they all takes 0ms, this is the reason why the average resolve time is this low. My guess is that the local resolver has cached the result, and this made the query this quick.
