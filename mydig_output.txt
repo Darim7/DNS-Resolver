@@ -1,5 +1,7 @@
 # Querying A for google.co.jp
 
+Args: google.co.jp A
+
 python3 normal_mydig.py google.co.jp A
 QUESTION SECTION:
 google.co.jp. IN A
@@ -14,6 +16,8 @@ MSG SIZE rcvd: 46
 ----------------------------------------------------------
 
 # Querying NS for stonybrook.edu
+
+Args: stonybrook.edu NS
 
 python3 normal_mydig.py stonybrook.edu ns
 QUESTION SECTION:
@@ -31,6 +35,8 @@ MSG SIZE rcvd: 146
 ----------------------------------------------------------
 
 # Querying MX for stonybrook.edu
+
+Args: stonybrook.edu MX
 
 python3 normal_mydig.py stonybrook.edu mx
 QUESTION SECTION:
