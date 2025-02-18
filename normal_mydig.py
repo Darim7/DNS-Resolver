@@ -85,11 +85,11 @@ if __name__ == "__main__":
 
     print("QUESTION SECTION:")
     for rrset in res.question:
-            print(rrset.to_text())
+        print(rrset.to_text())
 
     print("\nANSWER SECTION:")
     for rrset in res.answer:
-            print(rrset.to_text())
+        print(rrset.to_text())
 
     print(f"\nQuery time: {int(query_time)} msec")
     print(f"WHEN: {time.strftime('%a %b %d %H:%M:%S %Y')}")
