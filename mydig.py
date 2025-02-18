@@ -1,6 +1,7 @@
 import dns.dnssec
 import dns.exception
 import dns.message
+import dns.name
 import dns.query
 import dns.rdataclass
 import dns.rrset
@@ -24,7 +25,7 @@ def query(name: str, type: str, servers: list[str], sec=False):
     for server in servers:
         try:
             # print(f"Querying {name} {type} @{server}")
-            response = dns.query.udp(q, server, timeout=5)
+            response = dns.query.udp(q, server, timeout=0.1)
             break
         except dns.exception.Timeout:
             continue
@@ -45,6 +46,8 @@ def select_rdatatype(record_type: str):
         rtype = dns.rdatatype.DNSKEY
     elif record_type == "RRSIG":
         rtype = dns.rdatatype.RRSIG
+    elif record_type == "DS":
+        rtype = dns.rdatatype.DS
     
     return rtype
 
@@ -61,6 +64,7 @@ def extract_record(response_set: dns.rrset.RRset, record_type: str):
                 recs.append(rdata.to_text())  # Get records.
     return recs
 
+# Unused function here. Was used for extracting rrsig.
 def extract_rdata(response_set: dns.rrset.RRset, record_type: str):
     data = []
     rtype = select_rdatatype(record_type)
@@ -71,20 +75,46 @@ def extract_rdata(response_set: dns.rrset.RRset, record_type: str):
     return data
 
 def check_sec(response: dns.message.Message, name):
+    name = dns.name.from_text(name)
+
     # Get all the signatures.
     rrsig_rrset = extract_rdata(response.answer, "RRSIG")[0] # response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.RRSIG, create=True)
     record_rrset = response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.A, create=True)
     # print(f"Got rrsig: \n{rrsig_rrset}")
 
-    # Request for dnskey.
-    key_res = recurse(name, "DNSKEY")
-    if not key_res:
+    # Request for dnskey. And the rrsig of the key.
+    print(f"Fetching DNSKEY for {name}")
+    key_res = recurse(name, "DNSKEY", sec=True)
+    if not key_res or not rrsig_rrset or not record_rrset:
         return False
+    # print(key_res)
     dnskey_rrset = key_res.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.DNSKEY, create=True)
-    # print(f"\nGot dnskey: {dnskey_rrset[0]} for {name}")
+    # print(f"\nGot dnskey: {key_res} for {name}")
+
+    # Getting the ksk.
+    ksk = [key for key in dnskey_rrset if key.flags & 0x0001]  # SEP flag set
+    # print(ksk)
+
+    # Request for DS and their ksk.
+    ds = recurse(name, "DS", sec=True)
+    # print(ds)
+    ds_hash = ds.answer[0][0]
+    for key in dnskey_rrset:
+        key_tag = dns.dnssec.key_id(key)
+        print(f"DNSKEY: Flags={key.flags}, Algorithm={key.algorithm}, Key Tag={key_tag}, Key={key}")
+    # print(f"\n{dns.dnssec.key_id(ksk[0])}\n{dns.dnssec.key_id(ds_hash)}\n\n")
+    ksk_hash = dns.dnssec.make_ds(name, ksk[0], ds_hash.digest_type)
+    print(f"Got ds_hash: {ds_hash}")
+    print(f"Formed ksk_hash: {ksk_hash}")
+    hash_matched = ds_hash == ksk_hash
+    print(f"Comparing ksk_hash and ds_hash: {hash_matched}")
+    if not hash_matched:
+        return False
+
+    # Verify all the keys.
     try:
         dns.dnssec.validate_rrsig(record_rrset, rrsig_rrset, {dnskey_rrset.name: dnskey_rrset})
-    except:
+    except dns.exception.ValidationFailure:
         return False
     return True
 
@@ -117,8 +147,9 @@ if __name__ == "__main__":
 
     start = time.perf_counter()
     res = recurse(name, record_type, root_servers, want_sec)
+    secured = False
     if want_sec:
-        check_sec(res, name)
+        secured = check_sec(res, name)
     end = time.perf_counter()
     query_time = (end - start) * 1000
 
@@ -126,9 +157,9 @@ if __name__ == "__main__":
     for rrset in res.question:
         print(rrset.to_text())
 
-    print("\nANSWER SECTION:")
-    for rrset in res.answer:
-        print(rrset.to_text())
+    print(f"\nThe search WAS {'NOT ' if not secured else ''}secured by DNSSec.")
+    print("ANSWER SECTION:")
+    print(res.answer[0].to_text())
 
     print(f"\nQuery time: {int(query_time)} msec")
     print(f"WHEN: {time.strftime('%a %b %d %H:%M:%S %Y')}")
