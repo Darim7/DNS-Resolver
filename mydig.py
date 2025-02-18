@@ -109,10 +109,13 @@ def check_sec(response: dns.message.Message, name):
     ds = recurse(name, "DS", sec=True)
     # print(ds)
     ds_hash = ds.answer[0][0]
+    # Printting all the keys for checks and proof of validating.
     for key in dnskey_rrset:
         key_tag = dns.dnssec.key_id(key)
         print(f"DNSKEY: Flags={key.flags}, Algorithm={key.algorithm}, Key Tag={key_tag}, Key={key}")
     # print(f"\n{dns.dnssec.key_id(ksk[0])}\n{dns.dnssec.key_id(ds_hash)}\n\n")
+
+    # Making the hash using the given ksk.
     ksk_hash = dns.dnssec.make_ds(name, ksk[0], ds_hash.digest_type)
     print(f"Got ds_hash: {ds_hash}")
     print(f"Formed ksk_hash: {ksk_hash}")
@@ -123,7 +126,7 @@ def check_sec(response: dns.message.Message, name):
         VERIFICATION_FAILED = True
         return False
 
-    # Verify all the keys.
+    # Verify all the keys and the RRset
     try:
         dns.dnssec.validate_rrsig(record_rrset, rrsig_rrset, {dnskey_rrset.name: dnskey_rrset})
     except dns.exception.ValidationFailure:
