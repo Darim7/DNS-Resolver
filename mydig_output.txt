@@ -1,0 +1,48 @@
+# Querying A for google.co.jp
+
+python3 normal_mydig.py google.co.jp A
+QUESTION SECTION:
+google.co.jp. IN A
+
+ANSWER SECTION:
+google.co.jp. 300 IN A 142.250.81.227
+
+Query time: 10337 msec
+WHEN: Tue Feb 18 14:43:55 2025
+MSG SIZE rcvd: 46
+
+----------------------------------------------------------
+
+# Querying NS for stonybrook.edu
+
+python3 normal_mydig.py stonybrook.edu ns
+QUESTION SECTION:
+stonybrook.edu. IN NS
+
+ANSWER SECTION:
+stonybrook.edu. 900 IN NS whoisthere.stonybrook.edu.
+stonybrook.edu. 900 IN NS mewho.stonybrook.edu.
+stonybrook.edu. 900 IN NS nocnoc.stonybrook.edu.
+
+Query time: 56 msec
+WHEN: Tue Feb 18 14:51:03 2025
+MSG SIZE rcvd: 146
+
+----------------------------------------------------------
+
+# Querying MX for stonybrook.edu
+
+python3 normal_mydig.py stonybrook.edu mx
+QUESTION SECTION:
+stonybrook.edu. IN MX
+
+ANSWER SECTION:
+stonybrook.edu. 900 IN MX 1 aspmx.l.google.com.
+stonybrook.edu. 900 IN MX 10 alt4.aspmx.l.google.com.
+stonybrook.edu. 900 IN MX 10 alt3.aspmx.l.google.com.
+stonybrook.edu. 900 IN MX 5 alt2.aspmx.l.google.com.
+stonybrook.edu. 900 IN MX 5 alt1.aspmx.l.google.com.
+
+Query time: 52 msec
+WHEN: Tue Feb 18 14:55:02 2025
+MSG SIZE rcvd: 150
