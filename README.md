@@ -1,8 +1,27 @@
 # DNS-Resolver
 This is a network project that mimics `dig`! Thus the name `mydig.py` :sunglasses:
 
+## Instructions
+To get the program:
+```
+git clone https://github.com/Darim7/DNS-Resolver.git
+```
+
+To run the normal DNS resolver without DNSSec:
+```
+python3 normal_mydig.py <domain name> <record type>
+```
+To run the DNS resolver with DNSSec:
+```
+python3 mydig.py <domain name> <record type>
+```
+
 ## What did I do?
 In this project, I use `dnspython` to query for resource records on the internet.
+
+The program `normal_mydig.py` is the DNS resolver without implementing DNSSec.
+
+The program `mydig.py` is the DNS resolver with the implementation of DNSSec.
 
 ### Basic DNS Resolver
 For the first part, I made a basic DNS resolver. It uses a recursive function `recurse()` to query for a domain name.
