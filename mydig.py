@@ -18,6 +18,8 @@ root_servers = [
     "192.58.128.30", "193.0.14.129", "199.7.83.42", "202.12.27.33"
 ]
 
+VERIFICATION_FAILED = False
+
 def query(name: str, type: str, servers: list[str], sec=False):
     q = dns.message.make_query(name, type, want_dnssec=sec)
 
@@ -76,16 +78,24 @@ def extract_rdata(response_set: dns.rrset.RRset, record_type: str):
 
 def check_sec(response: dns.message.Message, name):
     name = dns.name.from_text(name)
+    global VERIFICATION_FAILED
 
     # Get all the signatures.
-    rrsig_rrset = extract_rdata(response.answer, "RRSIG")[0] # response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.RRSIG, create=True)
+    rrsig_rrset = extract_rdata(response.answer, "RRSIG")
+    if not rrsig_rrset:
+        # print("Missing RRSIG")
+        return False
+    rrsig_rrset = rrsig_rrset[0] # response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.RRSIG, create=True)
     record_rrset = response.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.A, create=True)
     # print(f"Got rrsig: \n{rrsig_rrset}")
 
     # Request for dnskey. And the rrsig of the key.
     print(f"Fetching DNSKEY for {name}")
     key_res = recurse(name, "DNSKEY", sec=True)
+    # print(key_res)
     if not key_res or not rrsig_rrset or not record_rrset:
+        print("Missing DNSKEY")
+        VERIFICATION_FAILED = True
         return False
     # print(key_res)
     dnskey_rrset = key_res.find_rrset(dns.message.ANSWER, name, dns.rdataclass.IN, dns.rdatatype.DNSKEY, create=True)
@@ -109,12 +119,16 @@ def check_sec(response: dns.message.Message, name):
     hash_matched = ds_hash == ksk_hash
     print(f"Comparing ksk_hash and ds_hash: {hash_matched}")
     if not hash_matched:
+        print(f"The ksk failed to be verified.")
+        VERIFICATION_FAILED = True
         return False
 
     # Verify all the keys.
     try:
         dns.dnssec.validate_rrsig(record_rrset, rrsig_rrset, {dnskey_rrset.name: dnskey_rrset})
     except dns.exception.ValidationFailure:
+        print("Failed to verify A record set.")
+        VERIFICATION_FAILED = True
         return False
     return True
 
@@ -153,12 +167,14 @@ if __name__ == "__main__":
     end = time.perf_counter()
     query_time = (end - start) * 1000
 
-    print("QUESTION SECTION:")
+    print(f"DNSSec WAS {'NOT ' if not secured else ''}supported.")
+    if VERIFICATION_FAILED:
+        print("DNSSec verification failed.") 
+    print("\nQUESTION SECTION:")
     for rrset in res.question:
         print(rrset.to_text())
 
-    print(f"\nThe search WAS {'NOT ' if not secured else ''}secured by DNSSec.")
-    print("ANSWER SECTION:")
+    print("\nANSWER SECTION:")
     print(res.answer[0].to_text())
 
     print(f"\nQuery time: {int(query_time)} msec")
